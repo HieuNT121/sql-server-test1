@@ -9,6 +9,7 @@ This repository includes a Docker Compose environment with:
 
 - SQL Server 2022 Developer Edition
 - automatic, one-time initialization of `SalesDB` and `MyDatabase`
+- repeatable SalesDB enrichment with multi-year sample orders and analytics tables
 - a browser dashboard that reads live data from `SalesDB`
 
 Start everything:
@@ -40,8 +41,26 @@ docker compose down -v
 ```
 
 The initializer does not overwrite databases that already exist in the Docker
-volume. To rebuild the course data from the SQL seed files, use the final command
-above and start the stack again.
+volume. It applies the additive `datasets/sql-server/enrich-salesdb.sql` script
+on startup; that script creates the extended schema and sample records once and
+leaves existing rows intact. The advanced query pack is
+`scripts/28_Advanced_Sales_Analytics.sql`.
+
+The enrichment adds a normalized product catalog, customer profiles, order
+lines, payments, returns, and inventory snapshots. It expands SalesDB to 40
+customers and 250 current orders. Run the advanced query pack in SQL Server
+Management Studio or with `sqlcmd` to explore monthly trends, RFM customer
+segments, product contribution, cohort retention, return rates, inventory
+signals, reconciliations, and a parameterized stored procedure.
+
+## Sales analytics pipeline
+
+Docker also provisions an in-database pipeline. `Pipeline.usp_RunSalesAnalyticsPipeline`
+records a run, calls `Pipeline.usp_RefreshDailySalesSummary` and
+`Pipeline.usp_RefreshCustomerValueSnapshot`, and records every step's status,
+duration, row count, and any error. Its latest status appears on the dashboard;
+select **Run pipeline** to launch another run. Pipeline data is kept in
+`Pipeline.PipelineRuns` and `Pipeline.PipelineStepRuns`.
 
 
 ---

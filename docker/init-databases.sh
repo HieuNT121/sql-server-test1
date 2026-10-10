@@ -39,4 +39,22 @@ initialize_database() {
 initialize_database "MyDatabase" "/seed/init-sqlserver-mydatabase.sql"
 initialize_database "SalesDB" "/seed/init-sqlserver-salesdb.sql"
 
+echo "Applying repeatable SalesDB enrichment ..."
+"$SQLCMD" \
+  -S "$SQLSERVER_HOST" \
+  -U sa \
+  -P "$MSSQL_SA_PASSWORD" \
+  -C \
+  -b \
+  -i "/seed/enrich-salesdb.sql"
+
+echo "Creating and running the sales analytics pipeline ..."
+"$SQLCMD" \
+  -S "$SQLSERVER_HOST" \
+  -U sa \
+  -P "$MSSQL_SA_PASSWORD" \
+  -C \
+  -b \
+  -i "/seed/create-sales-pipeline.sql"
+
 echo "SQL Server databases are ready."

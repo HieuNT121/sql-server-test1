@@ -33,6 +33,7 @@ services:
     volumes:
       - ./docker/init-databases.sh:/init-databases.sh:ro
       - ./datasets/sql-server:/seed:ro
+      - ./scripts:/course-scripts:ro
     entrypoint: ["/bin/bash", "/init-databases.sh"]
     restart: "no"
 

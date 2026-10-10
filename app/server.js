@@ -49,7 +49,7 @@ app.get("/health", async (_request, response) => {
 app.get("/api/dashboard", async (_request, response) => {
   try {
     const pool = await getPool();
-    const [server, metrics, orders, countries, tables] = await Promise.all([
+    const [server, metrics, orders, countries, tables, pipelineRun, pipelineSteps] = await Promise.all([
       pool.request().query(`
         SELECT
           CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(50)) AS productVersion,
@@ -61,7 +61,7 @@ app.get("/api/dashboard", async (_request, response) => {
         SELECT
           (SELECT COUNT(*) FROM Sales.Customers) AS customers,
           (SELECT COUNT(*) FROM Sales.Employees) AS employees,
-          (SELECT COUNT(*) FROM Sales.Products) AS products,
+          (SELECT COUNT(*) FROM Sales.ProductCatalog) AS products,
           (SELECT COUNT(*) FROM Sales.Orders) AS orders,
           (SELECT COALESCE(SUM(Sales), 0) FROM Sales.Orders) AS revenue
       `),
@@ -70,13 +70,14 @@ app.get("/api/dashboard", async (_request, response) => {
           o.OrderID AS orderId,
           CONVERT(VARCHAR(10), o.OrderDate, 23) AS orderDate,
           CONCAT(c.FirstName, ' ', COALESCE(c.LastName, '')) AS customer,
-          p.Product AS product,
+          COALESCE(pc.ProductName, p.Product) AS product,
           o.OrderStatus AS status,
           o.Quantity AS quantity,
           o.Sales AS sales
         FROM Sales.Orders o
         LEFT JOIN Sales.Customers c ON c.CustomerID = o.CustomerID
         LEFT JOIN Sales.Products p ON p.ProductID = o.ProductID
+        LEFT JOIN Sales.ProductCatalog pc ON pc.ProductID = o.ProductID
         ORDER BY o.OrderDate DESC, o.OrderID DESC
       `),
       pool.request().query(`
@@ -99,6 +100,36 @@ app.get("/api/dashboard", async (_request, response) => {
         GROUP BY s.name, t.name
         ORDER BY s.name, t.name
       `),
+      pool.request().query(`
+        SELECT TOP (1)
+          RunID AS runId,
+          PipelineName AS pipelineName,
+          Status AS status,
+          TriggeredBy AS triggeredBy,
+          StartedAt AS startedAt,
+          CompletedAt AS completedAt,
+          DurationMs AS durationMs,
+          RowsProcessed AS rowsProcessed,
+          ErrorMessage AS errorMessage
+        FROM Pipeline.PipelineRuns
+        ORDER BY RunID DESC
+      `),
+      pool.request().query(`
+        SELECT
+          StepRunID AS stepRunId,
+          StepOrder AS stepOrder,
+          StepName AS stepName,
+          ProcedureName AS procedureName,
+          Status AS status,
+          StartedAt AS startedAt,
+          CompletedAt AS completedAt,
+          DurationMs AS durationMs,
+          RowsProcessed AS rowsProcessed,
+          ErrorMessage AS errorMessage
+        FROM Pipeline.PipelineStepRuns
+        WHERE RunID = (SELECT TOP (1) RunID FROM Pipeline.PipelineRuns ORDER BY RunID DESC)
+        ORDER BY StepOrder
+      `),
     ]);
 
     response.json({
@@ -107,12 +138,38 @@ app.get("/api/dashboard", async (_request, response) => {
       orders: orders.recordset,
       countries: countries.recordset,
       tables: tables.recordset,
+      pipeline: {
+        run: pipelineRun.recordset[0] || null,
+        steps: pipelineSteps.recordset,
+      },
       refreshedAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Dashboard query failed:", error);
     response.status(503).json({
       error: "SQL Server is not available",
+      message: error.message,
+    });
+  }
+});
+
+app.post("/api/pipeline/run", async (_request, response) => {
+  try {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input("triggeredBy", sql.NVarChar(100), "Dashboard")
+      .output("runId", sql.BigInt)
+      .execute("Pipeline.usp_RunSalesAnalyticsPipeline");
+
+    response.status(201).json({
+      runId: result.output.runId,
+      run: result.recordset[0],
+    });
+  } catch (error) {
+    console.error("Pipeline run failed:", error);
+    response.status(500).json({
+      error: "Pipeline execution failed",
       message: error.message,
     });
   }

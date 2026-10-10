@@ -22,6 +22,7 @@
           <a class="nav-item active" href="#overview"><span>01</span> Overview</a>
           <a class="nav-item" href="#orders"><span>02</span> Orders</a>
           <a class="nav-item" href="#schema"><span>03</span> Schema</a>
+          <a class="nav-item" href="#pipeline"><span>04</span> Pipeline</a>
         </nav>
 
         <div class="sidebar-foot">
@@ -100,6 +101,39 @@
             </div>
             <div id="table-list" class="table-list" aria-live="polite"></div>
           </article>
+        </section>
+
+        <section id="pipeline" class="panel pipeline-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Stored procedure orchestration</p>
+              <h3>Sales analytics pipeline</h3>
+            </div>
+            <div class="pipeline-actions">
+              <span id="pipeline-status" class="pipeline-status pending">Waiting</span>
+              <button id="run-pipeline-button" class="run-pipeline" type="button">Run pipeline <span>↗</span></button>
+            </div>
+          </div>
+          <div class="pipeline-summary">
+            <div>
+              <span>Last run</span>
+              <strong id="pipeline-last-run">Waiting for the first run</strong>
+            </div>
+            <div>
+              <span>Trigger</span>
+              <strong id="pipeline-trigger">—</strong>
+            </div>
+            <div>
+              <span>Rows processed</span>
+              <strong id="pipeline-rows">—</strong>
+            </div>
+            <div>
+              <span>Duration</span>
+              <strong id="pipeline-duration">—</strong>
+            </div>
+          </div>
+          <div id="pipeline-error" class="pipeline-error" hidden></div>
+          <ol id="pipeline-steps" class="pipeline-steps" aria-live="polite"></ol>
         </section>
 
         <section id="orders" class="panel orders-panel">
