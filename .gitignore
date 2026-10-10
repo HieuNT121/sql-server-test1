@@ -1,0 +1,30 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Node.js dependencies and logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Docker and local database state
+*.mdf
+*.ldf
+*.ndf
+*.bak
+docker-data/
+sqlserver-data/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build and runtime output
+coverage/
+dist/
+build/
+*.log

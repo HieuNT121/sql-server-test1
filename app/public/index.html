@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="SQL Server 2022 sample database dashboard" />
+    <title>SQL Server 2022 · Sales Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="SQL Server console home">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </span>
+          <span>SQL<span class="brand-light">//</span>LAB</span>
+        </a>
+
+        <nav aria-label="Dashboard sections">
+          <a class="nav-item active" href="#overview"><span>01</span> Overview</a>
+          <a class="nav-item" href="#orders"><span>02</span> Orders</a>
+          <a class="nav-item" href="#schema"><span>03</span> Schema</a>
+        </nav>
+
+        <div class="sidebar-foot">
+          <p class="eyebrow">Environment</p>
+          <div class="environment"><i></i> Docker local</div>
+          <p class="connection">sqlserver:1433<br />SalesDB</p>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Database observatory</p>
+            <h1>Sales <em>console</em></h1>
+          </div>
+          <div class="server-pill">
+            <span class="pulse"></span>
+            <div>
+              <strong id="connection-label">Connecting</strong>
+              <small id="version-label">SQL Server 2022</small>
+            </div>
+          </div>
+        </header>
+
+        <section id="overview" class="hero-grid">
+          <article class="intro-card">
+            <p class="eyebrow">Live dataset</p>
+            <h2>Your database,<br /><span>at a glance.</span></h2>
+            <p>Real-time signals from the SalesDB sample running on SQL Server 2022.</p>
+            <button id="refresh-button" type="button">Refresh data <span>↗</span></button>
+          </article>
+
+          <div class="metric-grid" aria-label="Database metrics">
+            <article class="metric metric-accent">
+              <span class="metric-index">01</span>
+              <strong id="revenue-value">—</strong>
+              <p>Total sales</p>
+            </article>
+            <article class="metric">
+              <span class="metric-index">02</span>
+              <strong id="orders-value">—</strong>
+              <p>Orders</p>
+            </article>
+            <article class="metric">
+              <span class="metric-index">03</span>
+              <strong id="customers-value">—</strong>
+              <p>Customers</p>
+            </article>
+            <article class="metric metric-dark">
+              <span class="metric-index">04</span>
+              <strong id="products-value">—</strong>
+              <p>Products</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel sales-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Market signal</p>
+                <h3>Sales by country</h3>
+              </div>
+              <span class="panel-number">01</span>
+            </div>
+            <div id="country-bars" class="bars" aria-live="polite"></div>
+          </article>
+
+          <article id="schema" class="panel schema-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Data structure</p>
+                <h3>Schema inventory</h3>
+              </div>
+              <span class="panel-number">02</span>
+            </div>
+            <div id="table-list" class="table-list" aria-live="polite"></div>
+          </article>
+        </section>
+
+        <section id="orders" class="panel orders-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Latest activity</p>
+              <h3>Recent orders</h3>
+            </div>
+            <p id="updated-at" class="updated-at">Waiting for SQL Server…</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Product</th>
+                  <th>Status</th>
+                  <th class="numeric">Sales</th>
+                </tr>
+              </thead>
+              <tbody id="orders-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <div id="error-banner" class="error-banner" role="alert" hidden></div>
+      </main>
+    </div>
+  </body>
+</html>

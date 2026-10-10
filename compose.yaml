@@ -1,0 +1,64 @@
+name: sql-server-2022-demo
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-SqlServer2022!Demo}"
+    ports:
+      - "${SQLSERVER_PORT:-1433}:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" -b -o /dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  database-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-SqlServer2022!Demo}"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./docker/init-databases.sh:/init-databases.sh:ro
+      - ./datasets/sql-server:/seed:ro
+    entrypoint: ["/bin/bash", "/init-databases.sh"]
+    restart: "no"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3000
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_NAME: SalesDB
+      DB_USER: sa
+      DB_PASSWORD: "${MSSQL_SA_PASSWORD:-SqlServer2022!Demo}"
+    depends_on:
+      database-init:
+        condition: service_completed_successfully
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  sqlserver-data:
