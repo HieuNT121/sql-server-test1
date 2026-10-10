@@ -53,14 +53,26 @@ Management Studio or with `sqlcmd` to explore monthly trends, RFM customer
 segments, product contribution, cohort retention, return rates, inventory
 signals, reconciliations, and a parameterized stored procedure.
 
-## Sales analytics pipeline
+## Daily sales business pipeline
 
-Docker also provisions an in-database pipeline. `Pipeline.usp_RunSalesAnalyticsPipeline`
-records a run, calls `Pipeline.usp_RefreshDailySalesSummary` and
-`Pipeline.usp_RefreshCustomerValueSnapshot`, and records every step's status,
-duration, row count, and any error. Its latest status appears on the dashboard;
-select **Run pipeline** to launch another run. Pipeline data is kept in
-`Pipeline.PipelineRuns` and `Pipeline.PipelineStepRuns`.
+Docker also provisions a metadata-driven, five-layer in-database pipeline:
+
+1. **Quality gate:** validate customer, product, date, line, and payment data.
+2. **Reference extraction:** map every order to a store location from country rules.
+3. **Daily operations:** aggregate overall and per-store sales and refresh customer value.
+4. **Business metrics:** calculate ranked product performance and margins.
+5. **Publication:** publish a one-row executive KPI snapshot including the top store.
+
+Each stored procedure has its own file under `datasets/sql-server/pipeline/`.
+`Pipeline.usp_RunSalesAnalyticsPipeline` reads the registered step definitions.
+`Pipeline.usp_ExecutePipelineStep` checks dependencies and uses explicit `EXEC`
+statements to call each already-existing procedure, including
+`Pipeline.usp_ExtractStoreLocationMapping`. It records status, duration, rows,
+and errors. An application lock prevents
+overlapping runs. Select **Run pipeline** on the dashboard to launch a run and
+inspect its dependency graph, step logs, and quality-gate results. Audit data is
+stored in `Pipeline.PipelineRuns`, `Pipeline.PipelineStepRuns`, and
+`Pipeline.DataQualityResults`.
 
 
 ---

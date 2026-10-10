@@ -107,7 +107,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Stored procedure orchestration</p>
-              <h3>Sales analytics pipeline</h3>
+              <h3>Daily sales business pipeline</h3>
             </div>
             <div class="pipeline-actions">
               <span id="pipeline-status" class="pipeline-status pending">Waiting</span>
@@ -133,7 +133,28 @@
             </div>
           </div>
           <div id="pipeline-error" class="pipeline-error" hidden></div>
+          <div class="pipeline-subheading">
+            <div>
+              <p class="eyebrow">Dependency graph</p>
+              <h4>Pipeline structure</h4>
+            </div>
+            <span id="pipeline-structure-summary">Loading structure…</span>
+          </div>
+          <div id="pipeline-structure" class="pipeline-structure" aria-live="polite"></div>
+          <div class="pipeline-subheading detail-heading">
+            <div>
+              <p class="eyebrow">Execution log</p>
+              <h4>Latest run steps</h4>
+            </div>
+          </div>
           <ol id="pipeline-steps" class="pipeline-steps" aria-live="polite"></ol>
+          <div class="pipeline-subheading detail-heading">
+            <div>
+              <p class="eyebrow">Source checks</p>
+              <h4>Quality gate results</h4>
+            </div>
+          </div>
+          <div id="quality-results" class="quality-results" aria-live="polite"></div>
         </section>
 
         <section id="orders" class="panel orders-panel">

@@ -49,7 +49,18 @@ app.get("/health", async (_request, response) => {
 app.get("/api/dashboard", async (_request, response) => {
   try {
     const pool = await getPool();
-    const [server, metrics, orders, countries, tables, pipelineRun, pipelineSteps] = await Promise.all([
+    const [
+      server,
+      metrics,
+      orders,
+      countries,
+      tables,
+      pipelineRun,
+      pipelineSteps,
+      pipelineStructure,
+      pipelineDependencies,
+      qualityResults,
+    ] = await Promise.all([
       pool.request().query(`
         SELECT
           CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(50)) AS productVersion,
@@ -116,19 +127,62 @@ app.get("/api/dashboard", async (_request, response) => {
       `),
       pool.request().query(`
         SELECT
-          StepRunID AS stepRunId,
-          StepOrder AS stepOrder,
-          StepName AS stepName,
-          ProcedureName AS procedureName,
+          run.StepRunID AS stepRunId,
+          run.StepDefinitionID AS stepDefinitionId,
+          run.StepOrder AS stepOrder,
+          definition.StepKey AS stepKey,
+          definition.LayerNumber AS layerNumber,
+          definition.LayerName AS layerName,
+          run.StepName AS stepName,
+          run.ProcedureName AS procedureName,
+          run.Status AS status,
+          run.StartedAt AS startedAt,
+          run.CompletedAt AS completedAt,
+          run.DurationMs AS durationMs,
+          run.RowsProcessed AS rowsProcessed,
+          run.ErrorMessage AS errorMessage
+        FROM Pipeline.PipelineStepRuns AS run
+        LEFT JOIN Pipeline.PipelineStepDefinitions AS definition
+          ON definition.StepDefinitionID = run.StepDefinitionID
+        WHERE run.RunID = (SELECT TOP (1) RunID FROM Pipeline.PipelineRuns ORDER BY RunID DESC)
+        ORDER BY run.StepOrder
+      `),
+      pool.request().query(`
+        SELECT
+          step.StepDefinitionID AS stepDefinitionId,
+          step.StepKey AS stepKey,
+          step.StepOrder AS stepOrder,
+          step.LayerNumber AS layerNumber,
+          step.LayerName AS layerName,
+          step.StepName AS stepName,
+          CONCAT(step.ProcedureSchema, '.', step.ProcedureName) AS procedureName
+        FROM Pipeline.PipelineStepDefinitions AS step
+        JOIN Pipeline.PipelineDefinitions AS pipeline
+          ON pipeline.PipelineDefinitionID = step.PipelineDefinitionID
+        WHERE pipeline.PipelineKey = 'sales-analytics' AND step.IsActive = 1
+        ORDER BY step.LayerNumber, step.StepOrder
+      `),
+      pool.request().query(`
+        SELECT
+          step.StepKey AS stepKey,
+          required.StepKey AS dependsOnStepKey
+        FROM Pipeline.PipelineStepDependencies AS dependency
+        JOIN Pipeline.PipelineStepDefinitions AS step
+          ON step.StepDefinitionID = dependency.StepDefinitionID
+        JOIN Pipeline.PipelineStepDefinitions AS required
+          ON required.StepDefinitionID = dependency.DependsOnStepDefinitionID
+        ORDER BY step.StepOrder, required.StepOrder
+      `),
+      pool.request().query(`
+        SELECT
+          CheckName AS checkName,
+          Severity AS severity,
           Status AS status,
-          StartedAt AS startedAt,
-          CompletedAt AS completedAt,
-          DurationMs AS durationMs,
-          RowsProcessed AS rowsProcessed,
-          ErrorMessage AS errorMessage
-        FROM Pipeline.PipelineStepRuns
+          IssueCount AS issueCount,
+          Detail AS detail
+        FROM Pipeline.DataQualityResults
         WHERE RunID = (SELECT TOP (1) RunID FROM Pipeline.PipelineRuns ORDER BY RunID DESC)
-        ORDER BY StepOrder
+        ORDER BY CASE Severity WHEN 'Critical' THEN 1 ELSE 2 END, QualityResultID
       `),
     ]);
 
@@ -141,6 +195,9 @@ app.get("/api/dashboard", async (_request, response) => {
       pipeline: {
         run: pipelineRun.recordset[0] || null,
         steps: pipelineSteps.recordset,
+        structure: pipelineStructure.recordset,
+        dependencies: pipelineDependencies.recordset,
+        quality: qualityResults.recordset,
       },
       refreshedAt: new Date().toISOString(),
     });

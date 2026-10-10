@@ -24,7 +24,10 @@ const elements = {
   pipelineTrigger: document.querySelector("#pipeline-trigger"),
   pipelineRows: document.querySelector("#pipeline-rows"),
   pipelineDuration: document.querySelector("#pipeline-duration"),
+  pipelineStructure: document.querySelector("#pipeline-structure"),
+  pipelineStructureSummary: document.querySelector("#pipeline-structure-summary"),
   pipelineSteps: document.querySelector("#pipeline-steps"),
+  qualityResults: document.querySelector("#quality-results"),
   pipelineError: document.querySelector("#pipeline-error"),
   runPipelineButton: document.querySelector("#run-pipeline-button"),
   errorBanner: document.querySelector("#error-banner"),
@@ -72,6 +75,43 @@ function renderPipeline(pipeline) {
   elements.pipelineError.hidden = !run?.errorMessage;
   elements.pipelineError.textContent = run?.errorMessage ? `Pipeline error: ${run.errorMessage}` : "";
 
+  const statusByStep = new Map(pipeline.steps.map((step) => [step.stepKey, step.status]));
+  const dependenciesByStep = pipeline.dependencies.reduce((result, dependency) => {
+    const current = result.get(dependency.stepKey) || [];
+    current.push(dependency.dependsOnStepKey);
+    result.set(dependency.stepKey, current);
+    return result;
+  }, new Map());
+  const layers = pipeline.structure.reduce((result, step) => {
+    const current = result.get(step.layerNumber) || { name: step.layerName, steps: [] };
+    current.steps.push(step);
+    result.set(step.layerNumber, current);
+    return result;
+  }, new Map());
+
+  elements.pipelineStructureSummary.textContent = `${layers.size} layers · ${pipeline.structure.length} procedures`;
+
+  elements.pipelineStructure.innerHTML = [...layers.entries()]
+    .map(([layerNumber, layer], index) => `
+      ${index ? '<span class="layer-arrow" aria-hidden="true">→</span>' : ""}
+      <div class="pipeline-layer">
+        <div class="layer-title"><span>L${layerNumber}</span>${escapeHtml(layer.name)}</div>
+        ${layer.steps.map((step) => {
+          const stepStatus = String(statusByStep.get(step.stepKey) || "waiting").toLowerCase();
+          const dependencies = dependenciesByStep.get(step.stepKey) || [];
+          return `
+            <div class="structure-node ${stepStatus}">
+              <span class="node-state"></span>
+              <div>
+                <strong>${escapeHtml(step.stepName)}</strong>
+                <small>${escapeHtml(step.procedureName)}</small>
+                ${dependencies.length ? `<em>after ${dependencies.map(escapeHtml).join(", ")}</em>` : ""}
+              </div>
+            </div>`;
+        }).join("")}
+      </div>`)
+    .join("");
+
   elements.pipelineSteps.innerHTML = pipeline.steps.length
     ? pipeline.steps
       .map(
@@ -89,6 +129,19 @@ function renderPipeline(pipeline) {
       )
       .join("")
     : '<li class="pipeline-empty">No pipeline steps have been recorded.</li>';
+
+  elements.qualityResults.innerHTML = pipeline.quality.length
+    ? pipeline.quality.map((check) => `
+      <div class="quality-check ${String(check.status).toLowerCase()}">
+        <span class="quality-state">${check.status === "Passed" ? "✓" : "!"}</span>
+        <div>
+          <strong>${escapeHtml(check.checkName)}</strong>
+          <small>${escapeHtml(check.detail)}</small>
+        </div>
+        <span class="quality-severity">${escapeHtml(check.severity)}</span>
+        <span class="quality-count">${integer.format(check.issueCount)} issues</span>
+      </div>`).join("")
+    : '<div class="pipeline-empty">No quality results are available for this run.</div>';
 }
 
 function renderDashboard(data) {
