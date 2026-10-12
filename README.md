@@ -74,6 +74,24 @@ inspect its dependency graph, step logs, and quality-gate results. Audit data is
 stored in `Pipeline.PipelineRuns`, `Pipeline.PipelineStepRuns`, and
 `Pipeline.DataQualityResults`.
 
+## Advanced conversion fixtures
+
+The initialization manifest applies
+`datasets/sql-server/pipeline/03-advanced-salesdb.sql`, which adds the advanced
+SalesDB objects and source data used to test T-SQL-to-Spark conversions. It then
+deploys every block in `datasets/sql-server/pipeline/04-conversion-challenges.sql`
+as its own `Sales.usp_ConversionChallenge_C01` through
+`Sales.usp_ConversionChallenge_C30` stored procedure. The fixtures
+deliberately include dirty records, so they are kept separate from the daily
+analytics pipeline's quality gate.
+
+The dashboard pipeline selector also includes **T-SQL conversion readiness
+pipeline**. It validates the advanced fixture set, runs all 30 challenge
+procedures as separate logged steps, publishes their results, and records the
+latest 32-step run. It verifies
+that SQL Server source data is ready for comparison; run the matching blocks in
+your converted Databricks notebook to perform the cross-platform result diff.
+
 
 ---
 

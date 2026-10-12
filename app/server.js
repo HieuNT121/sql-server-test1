@@ -35,6 +35,7 @@ function getPool() {
 }
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json());
 
 app.get("/health", async (_request, response) => {
   try {
@@ -46,9 +47,30 @@ app.get("/health", async (_request, response) => {
   }
 });
 
-app.get("/api/dashboard", async (_request, response) => {
+app.get("/api/dashboard", async (request, response) => {
   try {
     const pool = await getPool();
+    const pipelineDefinitions = await pool.request().query(`
+      SELECT
+        PipelineKey AS pipelineKey,
+        PipelineName AS pipelineName,
+        Description AS description
+      FROM Pipeline.PipelineDefinitions
+      WHERE IsActive = 1
+      ORDER BY CASE PipelineKey WHEN 'sales-analytics' THEN 0 ELSE 1 END, PipelineName
+    `);
+
+    const requestedPipelineKey = String(request.query.pipelineKey || "sales-analytics");
+    const selectedPipeline = pipelineDefinitions.recordset.find(
+      (pipeline) => pipeline.pipelineKey === requestedPipelineKey,
+    );
+
+    if (!selectedPipeline) {
+      response.status(404).json({ error: "Pipeline not found" });
+      return;
+    }
+
+    const pipelineKey = selectedPipeline.pipelineKey;
     const [
       server,
       metrics,
@@ -60,6 +82,7 @@ app.get("/api/dashboard", async (_request, response) => {
       pipelineStructure,
       pipelineDependencies,
       qualityResults,
+      conversionChallenges,
     ] = await Promise.all([
       pool.request().query(`
         SELECT
@@ -111,21 +134,24 @@ app.get("/api/dashboard", async (_request, response) => {
         GROUP BY s.name, t.name
         ORDER BY s.name, t.name
       `),
-      pool.request().query(`
+      pool.request().input("pipelineKey", sql.VarChar(80), pipelineKey).query(`
         SELECT TOP (1)
-          RunID AS runId,
-          PipelineName AS pipelineName,
-          Status AS status,
-          TriggeredBy AS triggeredBy,
-          StartedAt AS startedAt,
-          CompletedAt AS completedAt,
-          DurationMs AS durationMs,
-          RowsProcessed AS rowsProcessed,
-          ErrorMessage AS errorMessage
-        FROM Pipeline.PipelineRuns
-        ORDER BY RunID DESC
+          run.RunID AS runId,
+          run.PipelineName AS pipelineName,
+          run.Status AS status,
+          run.TriggeredBy AS triggeredBy,
+          run.StartedAt AS startedAt,
+          run.CompletedAt AS completedAt,
+          run.DurationMs AS durationMs,
+          run.RowsProcessed AS rowsProcessed,
+          run.ErrorMessage AS errorMessage
+        FROM Pipeline.PipelineRuns AS run
+        JOIN Pipeline.PipelineDefinitions AS pipeline
+          ON pipeline.PipelineDefinitionID = run.PipelineDefinitionID
+        WHERE pipeline.PipelineKey = @pipelineKey
+        ORDER BY run.RunID DESC
       `),
-      pool.request().query(`
+      pool.request().input("pipelineKey", sql.VarChar(80), pipelineKey).query(`
         SELECT
           run.StepRunID AS stepRunId,
           run.StepDefinitionID AS stepDefinitionId,
@@ -144,10 +170,19 @@ app.get("/api/dashboard", async (_request, response) => {
         FROM Pipeline.PipelineStepRuns AS run
         LEFT JOIN Pipeline.PipelineStepDefinitions AS definition
           ON definition.StepDefinitionID = run.StepDefinitionID
-        WHERE run.RunID = (SELECT TOP (1) RunID FROM Pipeline.PipelineRuns ORDER BY RunID DESC)
+        JOIN Pipeline.PipelineDefinitions AS pipeline
+          ON pipeline.PipelineDefinitionID = definition.PipelineDefinitionID
+        WHERE run.RunID =
+        (
+          SELECT TOP (1) latest.RunID
+          FROM Pipeline.PipelineRuns AS latest
+          WHERE latest.PipelineDefinitionID = pipeline.PipelineDefinitionID
+          ORDER BY latest.RunID DESC
+        )
+          AND pipeline.PipelineKey = @pipelineKey
         ORDER BY run.StepOrder
       `),
-      pool.request().query(`
+      pool.request().input("pipelineKey", sql.VarChar(80), pipelineKey).query(`
         SELECT
           step.StepDefinitionID AS stepDefinitionId,
           step.StepKey AS stepKey,
@@ -159,10 +194,10 @@ app.get("/api/dashboard", async (_request, response) => {
         FROM Pipeline.PipelineStepDefinitions AS step
         JOIN Pipeline.PipelineDefinitions AS pipeline
           ON pipeline.PipelineDefinitionID = step.PipelineDefinitionID
-        WHERE pipeline.PipelineKey = 'sales-analytics' AND step.IsActive = 1
+        WHERE pipeline.PipelineKey = @pipelineKey AND step.IsActive = 1
         ORDER BY step.LayerNumber, step.StepOrder
       `),
-      pool.request().query(`
+      pool.request().input("pipelineKey", sql.VarChar(80), pipelineKey).query(`
         SELECT
           step.StepKey AS stepKey,
           required.StepKey AS dependsOnStepKey
@@ -171,9 +206,12 @@ app.get("/api/dashboard", async (_request, response) => {
           ON step.StepDefinitionID = dependency.StepDefinitionID
         JOIN Pipeline.PipelineStepDefinitions AS required
           ON required.StepDefinitionID = dependency.DependsOnStepDefinitionID
+        JOIN Pipeline.PipelineDefinitions AS pipeline
+          ON pipeline.PipelineDefinitionID = step.PipelineDefinitionID
+        WHERE pipeline.PipelineKey = @pipelineKey
         ORDER BY step.StepOrder, required.StepOrder
       `),
-      pool.request().query(`
+      pool.request().input("pipelineKey", sql.VarChar(80), pipelineKey).query(`
         SELECT
           CheckName AS checkName,
           Severity AS severity,
@@ -181,8 +219,39 @@ app.get("/api/dashboard", async (_request, response) => {
           IssueCount AS issueCount,
           Detail AS detail
         FROM Pipeline.DataQualityResults
-        WHERE RunID = (SELECT TOP (1) RunID FROM Pipeline.PipelineRuns ORDER BY RunID DESC)
+        WHERE RunID =
+        (
+          SELECT TOP (1) run.RunID
+          FROM Pipeline.PipelineRuns AS run
+          JOIN Pipeline.PipelineDefinitions AS pipeline
+            ON pipeline.PipelineDefinitionID = run.PipelineDefinitionID
+          WHERE pipeline.PipelineKey = @pipelineKey
+          ORDER BY run.RunID DESC
+        )
         ORDER BY CASE Severity WHEN 'Critical' THEN 1 ELSE 2 END, QualityResultID
+      `),
+      pool.request().input("pipelineKey", sql.VarChar(80), pipelineKey).query(`
+        SELECT
+          result.ChallengeKey AS challengeKey,
+          definition.ChallengeOrder AS challengeOrder,
+          definition.ComplexityLevel AS complexityLevel,
+          definition.ChallengeName AS challengeName,
+          result.Status AS status,
+          result.SourceRowCount AS sourceRowCount,
+          result.Detail AS detail
+        FROM Pipeline.ConversionChallengeResults AS result
+        JOIN Pipeline.ConversionChallengeDefinitions AS definition
+          ON definition.ChallengeKey = result.ChallengeKey
+        WHERE result.RunID =
+        (
+          SELECT TOP (1) run.RunID
+          FROM Pipeline.PipelineRuns AS run
+          JOIN Pipeline.PipelineDefinitions AS pipeline
+            ON pipeline.PipelineDefinitionID = run.PipelineDefinitionID
+          WHERE pipeline.PipelineKey = @pipelineKey
+          ORDER BY run.RunID DESC
+        )
+        ORDER BY definition.ChallengeOrder
       `),
     ]);
 
@@ -192,12 +261,17 @@ app.get("/api/dashboard", async (_request, response) => {
       orders: orders.recordset,
       countries: countries.recordset,
       tables: tables.recordset,
+      pipelines: pipelineDefinitions.recordset,
       pipeline: {
+        key: pipelineKey,
+        name: selectedPipeline.pipelineName,
+        description: selectedPipeline.description,
         run: pipelineRun.recordset[0] || null,
         steps: pipelineSteps.recordset,
         structure: pipelineStructure.recordset,
         dependencies: pipelineDependencies.recordset,
         quality: qualityResults.recordset,
+        conversionChallenges: conversionChallenges.recordset,
       },
       refreshedAt: new Date().toISOString(),
     });
@@ -210,16 +284,29 @@ app.get("/api/dashboard", async (_request, response) => {
   }
 });
 
-app.post("/api/pipeline/run", async (_request, response) => {
+app.post("/api/pipeline/run", async (request, response) => {
   try {
     const pool = await getPool();
+    const pipelineKey = String(request.body?.pipelineKey || "sales-analytics");
+    const runnerByPipelineKey = {
+      "sales-analytics": "Pipeline.usp_RunSalesAnalyticsPipeline",
+      "conversion-validation": "Pipeline.usp_RunConversionValidationPipeline",
+    };
+    const procedureName = runnerByPipelineKey[pipelineKey];
+
+    if (!procedureName) {
+      response.status(404).json({ error: "Pipeline not found" });
+      return;
+    }
+
     const result = await pool
       .request()
       .input("triggeredBy", sql.NVarChar(100), "Dashboard")
       .output("runId", sql.BigInt)
-      .execute("Pipeline.usp_RunSalesAnalyticsPipeline");
+      .execute(procedureName);
 
     response.status(201).json({
+      pipelineKey,
       runId: result.output.runId,
       run: result.recordset[0],
     });

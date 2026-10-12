@@ -19,6 +19,8 @@ const elements = {
   ordersBody: document.querySelector("#orders-body"),
   updatedAt: document.querySelector("#updated-at"),
   refreshButton: document.querySelector("#refresh-button"),
+  pipelineName: document.querySelector("#pipeline-name"),
+  pipelineSelector: document.querySelector("#pipeline-selector"),
   pipelineStatus: document.querySelector("#pipeline-status"),
   pipelineLastRun: document.querySelector("#pipeline-last-run"),
   pipelineTrigger: document.querySelector("#pipeline-trigger"),
@@ -30,8 +32,13 @@ const elements = {
   qualityResults: document.querySelector("#quality-results"),
   pipelineError: document.querySelector("#pipeline-error"),
   runPipelineButton: document.querySelector("#run-pipeline-button"),
+  conversionChallengesSection: document.querySelector("#conversion-challenges-section"),
+  conversionChallengesSummary: document.querySelector("#conversion-challenges-summary"),
+  conversionChallenges: document.querySelector("#conversion-challenges"),
   errorBanner: document.querySelector("#error-banner"),
 };
+
+let selectedPipelineKey = "sales-analytics";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -59,7 +66,15 @@ function formatDuration(value) {
   return `${(value / 1000).toFixed(2)} s`;
 }
 
+function renderPipelineSelector(pipelines, selectedKey) {
+  elements.pipelineSelector.innerHTML = pipelines
+    .map((pipeline) => `<option value="${escapeHtml(pipeline.pipelineKey)}">${escapeHtml(pipeline.pipelineName)}</option>`)
+    .join("");
+  elements.pipelineSelector.value = selectedKey;
+}
+
 function renderPipeline(pipeline) {
+  elements.pipelineName.textContent = pipeline.name || "Pipeline";
   const run = pipeline.run;
   const status = run?.status || "Waiting";
   const statusClass = status.toLowerCase();
@@ -142,6 +157,23 @@ function renderPipeline(pipeline) {
         <span class="quality-count">${integer.format(check.issueCount)} issues</span>
       </div>`).join("")
     : '<div class="pipeline-empty">No quality results are available for this run.</div>';
+
+  const challenges = pipeline.conversionChallenges || [];
+  elements.conversionChallengesSection.hidden = challenges.length === 0;
+  elements.conversionChallengesSummary.textContent = challenges.length
+    ? `${challenges.filter((challenge) => challenge.status === "Passed").length}/${challenges.length} ready`
+    : "—";
+  elements.conversionChallenges.innerHTML = challenges.map((challenge) => `
+    <li class="conversion-challenge ${String(challenge.status).toLowerCase()}">
+      <span class="challenge-key">${escapeHtml(challenge.challengeKey)}</span>
+      <div>
+        <strong>${escapeHtml(challenge.challengeName)}</strong>
+        <small>${escapeHtml(challenge.detail)}</small>
+      </div>
+      <span class="challenge-level">L${escapeHtml(challenge.complexityLevel)}</span>
+      <span class="challenge-rows">${integer.format(challenge.sourceRowCount || 0)} rows</span>
+      <span class="step-status">${escapeHtml(challenge.status)}</span>
+    </li>`).join("");
 }
 
 function renderDashboard(data) {
@@ -152,6 +184,7 @@ function renderDashboard(data) {
   elements.orders.textContent = integer.format(data.metrics.orders);
   elements.customers.textContent = integer.format(data.metrics.customers);
   elements.products.textContent = integer.format(data.metrics.products);
+  renderPipelineSelector(data.pipelines, data.pipeline.key);
   renderPipeline(data.pipeline);
 
   const highestSales = Math.max(...data.countries.map((item) => item.sales), 1);
@@ -203,7 +236,9 @@ async function loadDashboard() {
   elements.errorBanner.hidden = true;
 
   try {
-    const response = await fetch("/api/dashboard", { headers: { Accept: "application/json" } });
+    const response = await fetch(`/api/dashboard?pipelineKey=${encodeURIComponent(selectedPipelineKey)}`, {
+      headers: { Accept: "application/json" },
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || data.error || "Request failed");
     renderDashboard(data);
@@ -224,7 +259,11 @@ async function runPipeline() {
   elements.errorBanner.hidden = true;
 
   try {
-    const response = await fetch("/api/pipeline/run", { method: "POST", headers: { Accept: "application/json" } });
+    const response = await fetch("/api/pipeline/run", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ pipelineKey: selectedPipelineKey }),
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || data.error || "Pipeline request failed");
     await loadDashboard();
@@ -239,4 +278,8 @@ async function runPipeline() {
 
 elements.refreshButton.addEventListener("click", loadDashboard);
 elements.runPipelineButton.addEventListener("click", runPipeline);
+elements.pipelineSelector.addEventListener("change", (event) => {
+  selectedPipelineKey = event.target.value;
+  loadDashboard();
+});
 loadDashboard();

@@ -77,6 +77,26 @@ BEGIN
         ELSE IF @StepKey = 'executive-kpis'
             EXEC Pipeline.usp_RefreshExecutiveKpis
                 @RunID = @RunID, @RowsProcessed = @RowsProcessed OUTPUT;
+        ELSE IF @StepKey = 'validate-conversion-fixtures'
+            EXEC Pipeline.usp_ValidateConversionFixtures
+                @RunID = @RunID, @RowsProcessed = @RowsProcessed OUTPUT;
+        ELSE IF @StepKey LIKE 'challenge-c%'
+             AND @ProcedureSchema = N'Sales'
+             AND @ProcedureName LIKE N'usp_ConversionChallenge_C%'
+        BEGIN
+            DECLARE @ChallengeSql NVARCHAR(1000) =
+                N'EXEC ' + @QualifiedProcedure
+                + N' @RunID = @RunID, @RowsProcessed = @RowsProcessed OUTPUT;';
+
+            EXEC sys.sp_executesql
+                @ChallengeSql,
+                N'@RunID BIGINT, @RowsProcessed INT OUTPUT',
+                @RunID = @RunID,
+                @RowsProcessed = @RowsProcessed OUTPUT;
+        END;
+        ELSE IF @StepKey = 'publish-conversion-readiness'
+            EXEC Pipeline.usp_PublishConversionReadiness
+                @RunID = @RunID, @RowsProcessed = @RowsProcessed OUTPUT;
         ELSE
             THROW 51012, 'The pipeline step does not have an explicit procedure call.', 1;
 

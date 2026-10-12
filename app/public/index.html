@@ -107,9 +107,11 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Stored procedure orchestration</p>
-              <h3>Daily sales business pipeline</h3>
+              <h3 id="pipeline-name">Pipeline</h3>
             </div>
             <div class="pipeline-actions">
+              <label class="pipeline-selector-label" for="pipeline-selector">Pipeline</label>
+              <select id="pipeline-selector" class="pipeline-selector" aria-label="Select pipeline"></select>
               <span id="pipeline-status" class="pipeline-status pending">Waiting</span>
               <button id="run-pipeline-button" class="run-pipeline" type="button">Run pipeline <span>↗</span></button>
             </div>
@@ -155,6 +157,16 @@
             </div>
           </div>
           <div id="quality-results" class="quality-results" aria-live="polite"></div>
+          <div id="conversion-challenges-section" hidden>
+            <div class="pipeline-subheading detail-heading">
+              <div>
+                <p class="eyebrow">T-SQL to Spark baseline</p>
+                <h4>Conversion challenges</h4>
+              </div>
+              <span id="conversion-challenges-summary">—</span>
+            </div>
+            <ol id="conversion-challenges" class="conversion-challenges" aria-live="polite"></ol>
+          </div>
         </section>
 
         <section id="orders" class="panel orders-panel">
