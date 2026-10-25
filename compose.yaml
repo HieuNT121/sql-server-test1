@@ -9,7 +9,7 @@ services:
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-SqlServer2022!Demo}"
     ports:
-      - "${SQLSERVER_PORT:-1433}:1433"
+      - "${SQLSERVER_PORT:-14331}:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:

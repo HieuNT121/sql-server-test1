@@ -19,7 +19,7 @@ docker compose up --build
 ```
 
 Then open [http://localhost:3000](http://localhost:3000). SQL Server is also
-available to database tools at `localhost,1433` with user `sa`. The default
+available to database tools at `localhost,14331` with user `sa`. The default
 development password is `SqlServer2022!Demo`; copy `.env.example` to `.env` and
 change `MSSQL_SA_PASSWORD` before using the setup outside a local demo.
 
